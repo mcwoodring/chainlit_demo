@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from os import environ as env
 from types import SimpleNamespace
 from dotenv import load_dotenv
@@ -34,7 +35,7 @@ _configurations = {
     )
 }
 
-_config = _configurations['runpod']
+_config = _configurations['openai']
 _client = openai.AsyncClient(api_key=_config.api_key, base_url=_config.endpoint_url)
 
 # xref https://docs.chainlit.io/concepts/chat-lifecycle
@@ -52,7 +53,31 @@ def on_chat_start():
 async def on_message(message: cl.Message):
     # Maintain an array of messages in the user session
     message_history = cl.user_session.get(_config.message_history_key, [])
-    message_history.append({'role': 'user', 'content': message.content})
+
+    images = [file for file in message.elements if 'image' in file.mime] if message.elements else []
+
+    if images:
+        # Read the first image and encode it to base64
+        with open(images[0].path, 'rb') as f:
+            base64_image = base64.b64encode(f.read()).decode('utf-8')
+
+        message_history.append({
+            'role': 'user',
+            'content': [
+                {
+                    'type': 'text',
+                    'text': message.content if message.content else "What's in this image?"
+                },
+                {
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': f"data:image/jpeg;base64,{base64_image}"
+                    }
+                }
+            ]
+        })
+    else:
+        message_history.append({'role': 'user', 'content': message.content})
 
     response_message = cl.Message(content='')
     await response_message.send()
