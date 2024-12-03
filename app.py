@@ -15,7 +15,7 @@ _config = SimpleNamespace(
         "temperature": 0.3,
         "max_tokens": 500,
     },
-    msg_counter_key = 'msg_counter',
+    message_history_key = 'message_history',
 )
 _client = openai.AsyncClient(api_key=env['OPENAI_API_KEY'], base_url=_config.endpoint_url)
 
@@ -26,31 +26,36 @@ _client = openai.AsyncClient(api_key=env['OPENAI_API_KEY'], base_url=_config.end
 def on_chat_start():
     # xref https://docs.chainlit.io/concepts/user-session
     #
-    cl.user_session.set(_config.msg_counter_key, 0)
+    pass
 
 
 # xref https://docs.chainlit.io/concepts/chat-lifecycle
 #
 @cl.on_message
 async def on_message(message: cl.Message):
-    # xref https://docs.chainlit.io/concepts/user-session
-    #
-    msg_counter = cl.user_session.get(_config.msg_counter_key)
-    msg_counter += 1
-    cl.user_session.set(_config.msg_counter_key, msg_counter)
-                        
-    response = await _client.chat.completions.create(
-        messages=[{"role": "user", "content": message.content}],
+    # Maintain an array of messages in the user session
+    message_history = cl.user_session.get(_config.message_history_key, [])
+    message_history.append({"role": "user", "content": message.content})
+
+    response_message = cl.Message(content="")
+    await response_message.send()
+    
+    # Pass in the full message history for each request
+    stream = await _client.chat.completions.create(
+        messages=message_history, 
+        stream=True,
         **_config.model_kwargs
     )
-    
-    # xref https://platform.openai.com/docs/guides/chat-completions/response-format
-    #
-    response_content = f"[{msg_counter}] {response.choices[0].message.content}"
 
-    await cl.Message(
-        content=response_content,
-    ).send()
+    async for part in stream:
+        if token := part.choices[0].delta.content or "":
+            await response_message.stream_token(token)
+
+    await response_message.update()
+
+    # Record the AI's response in the history
+    message_history.append({"role": "assistant", "content": response_message.content})
+    cl.user_session.set(_config.message_history_key, message_history)
 
 
 # xref https://docs.chainlit.io/concepts/chat-lifecycle
