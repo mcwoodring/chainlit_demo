@@ -7,18 +7,34 @@ import chainlit as cl
 from chainlit.cli import run_chainlit
 import openai
 
+load_dotenv()
 
-_config = SimpleNamespace(
-    endpoint_url = "https://api.openai.com/v1",
+# _config_open_ai = SimpleNamespace(
+#     endpoint_url = "https://api.openai.com/v1",
+#     model_kwargs = {
+#         "model": "chatgpt-4o-latest",   # https://platform.openai.com/docs/models/gpt-4o
+#         "temperature": 0.3,
+#         "max_tokens": 500,
+#     },
+#     message_history_key = 'message_history',
+# )
+# _client_open_ai = openai.AsyncClient(api_key=env['OPENAI_API_KEY'], base_url=_config_open_ai.endpoint_url)
+
+
+_config_runpod = SimpleNamespace(
+    endpoint_url = f"https://api.runpod.ai/v2/{env['RUNPOD_SERVERLESS_ID']}/openai/v1",
     model_kwargs = {
-        "model": "chatgpt-4o-latest",   # https://platform.openai.com/docs/models/gpt-4o
+        "model": "mistralai/Mistral-7B-Instruct-v0.3",
         "temperature": 0.3,
-        "max_tokens": 500,
+        "max_tokens": 500
     },
     message_history_key = 'message_history',
 )
-_client = openai.AsyncClient(api_key=env['OPENAI_API_KEY'], base_url=_config.endpoint_url)
+_client_runpod = openai.AsyncClient(api_key=env['RUNPOD_API_KEY'], base_url=_config_runpod.endpoint_url)
 
+
+_config = _config_runpod
+_client = _client_runpod
 
 # xref https://docs.chainlit.io/concepts/chat-lifecycle
 #
@@ -66,7 +82,6 @@ def on_stop():
 
 
 async def main():
-    load_dotenv()
     run_chainlit(__file__)
 
 
